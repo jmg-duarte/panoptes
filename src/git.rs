@@ -20,7 +20,7 @@ impl Summarize for git2::Repository {
         let statuses = self.statuses(Some(&mut status_opts)).unwrap();
         for s in statuses.iter() {
             if let Some(path) = s.path() {
-                println!("  {:#?} {:#?}", s.status(), path);
+                println!("  {:#?} {}", s.status(), path.yellow());
             }
         }
     }
