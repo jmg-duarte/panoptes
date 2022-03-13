@@ -1,13 +1,20 @@
 [package]
 name = "panoptes"
-version = "0.1.0"
+version = "0.0.1-rc0"
+authors = ["José Duarte <duarte.gmj@gmail.com>"]
 edition = "2021"
+license = "MIT OR Apache-2.0"
+description = "Keep an eye on your repositories."
+repository = "https://github.com/jmg-duarte/panoptes"
+documentation = "https://docs.rs/panoptes"
+readme = "README.md"
+keywords = ["git"]
+categories = ["command-line-utilities"]
+exclude = ["static/*"]
 
 [dependencies]
 clap = {version = "3", features = ["derive"]}
 git2 = "0.13"
-walkdir = "2"
 rusqlite = { version = "0.27.0", features = ["bundled"] }
-ansi-escapes = "0.1.1"
 colored = "2.0.0"
 chrono = "0.4"
