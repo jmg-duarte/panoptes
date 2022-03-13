@@ -1,16 +1,10 @@
 use std::{
-    collections::HashMap,
-    env::current_dir,
-    io::{stdout, Write},
-    path::PathBuf,
-    str::FromStr,
-    sync::mpsc::channel,
-    time::Duration,
+    env::current_dir, io::stdout, path::PathBuf, str::FromStr, sync::mpsc::channel, time::Duration, thread,
 };
 
 use clap::{Parser, Subcommand};
+use chrono::prelude::*;
 
-use notify::{watcher, DebouncedEvent, RecursiveMode, Watcher};
 use panoptes::{db::Database, stdout::StdoutExt};
 
 fn default_database_path() -> PathBuf {
@@ -65,70 +59,44 @@ fn main() {
             db.add_repository(directory, group);
         }
         Commands::Watch { group } => {
-            let (snd, rcv) = channel();
-            let mut watcher = watcher(snd, Duration::from_secs(3)).unwrap();
-
             let paths = db.get_repositories(group).unwrap();
             let repos = paths
                 .into_iter()
-                .map(|path| {
-                    let repo = git2::Repository::open(path).unwrap();
-                    watcher.watch(repo.path(), RecursiveMode::Recursive).unwrap();
-                    repo
-                })
-                .collect();
+                .map(git2::Repository::open)
+                .collect::<Result<_, git2::Error>>().unwrap();
 
             loop {
                 stdout().clear_screen().unwrap();
-                let event = rcv.recv().unwrap();
-                match event {
-                    DebouncedEvent::NoticeWrite(p) => {
-                        fun_name(&repos, p);
-                    }
-                    DebouncedEvent::NoticeRemove(p) => {
-                        fun_name(&repos, p);
-                    }
-                    DebouncedEvent::Create(p) => {
-                        fun_name(&repos, p);
-                    }
-                    DebouncedEvent::Write(p) => {
-                        fun_name(&repos, p);
-                    }
-                    DebouncedEvent::Chmod(p) => {
-                        fun_name(&repos, p);
-                    }
-                    DebouncedEvent::Remove(p) => {
-                        fun_name(&repos, p);
-                    }
-                    DebouncedEvent::Rename(_, _) => todo!(),
-                    DebouncedEvent::Rescan => todo!(),
-                    DebouncedEvent::Error(_, _) => todo!(),
-                }
+                fun_name(&repos);
+                println!("last updated at: {}", Utc::now());
+                thread::sleep(Duration::from_secs(5));
             }
         }
     }
 }
 
-fn fun_name(path_to_repo: &Vec<git2::Repository>, p: PathBuf) {
+fn fun_name(path_to_repo: &Vec<git2::Repository>) {
     for repo in path_to_repo.iter() {
-        if p.starts_with(repo.path()) {
-            let mut status_opts = git2::StatusOptions::new();
-            status_opts
-                .include_untracked(true)
-                .show(git2::StatusShow::IndexAndWorkdir);
+        let mut status_opts = git2::StatusOptions::new();
+        status_opts
+            .include_untracked(true)
+            .show(git2::StatusShow::IndexAndWorkdir);
 
-            println!("{} {}", repo.path().parent().unwrap().display(), repo.head().unwrap().shorthand().unwrap());
+        println!(
+            "{} {}",
+            repo.path().parent().unwrap().display(),
+            repo.head().unwrap().shorthand().unwrap()
+        );
 
-            let statuses = repo.statuses(Some(&mut status_opts)).unwrap();
-            for s in statuses.iter() {
-                if let Some(path) = s.path() {
-                    println!(
-                        "\t{:#016b} {:#?} {:#?}",
-                        s.status().bits(),
-                        s.status(),
-                        path
-                    );
-                }
+        let statuses = repo.statuses(Some(&mut status_opts)).unwrap();
+        for s in statuses.iter() {
+            if let Some(path) = s.path() {
+                println!(
+                    "\t{:#016b} {:#?} {:#?}",
+                    s.status().bits(),
+                    s.status(),
+                    path
+                );
             }
         }
     }
