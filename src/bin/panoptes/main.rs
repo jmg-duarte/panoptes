@@ -1,11 +1,9 @@
-use std::{
-    env::current_dir, io::stdout, path::PathBuf, str::FromStr, sync::mpsc::channel, time::Duration, thread,
-};
+use std::{env::current_dir, io::stdout, path::PathBuf, str::FromStr, thread, time::Duration};
 
-use clap::{Parser, Subcommand};
 use chrono::prelude::*;
+use clap::{Parser, Subcommand};
 
-use panoptes::{db::Database, stdout::StdoutExt};
+use panoptes::{db::Database, git::Summarize, stdout::StdoutExt};
 
 fn default_database_path() -> PathBuf {
     let mut default_database_path = PathBuf::from_str(&std::env::var("HOME").unwrap()).unwrap();
@@ -44,6 +42,10 @@ enum Commands {
         /// all registered repositories will be used.
         #[clap(short, long)]
         group: Option<String>,
+
+        /// The refresh delay (in seconds).
+        #[clap(long, default_value_t = 5)]
+        delay: u64
     },
 }
 
@@ -58,45 +60,19 @@ fn main() {
             let _ = git2::Repository::open(&directory).unwrap();
             db.add_repository(directory, group);
         }
-        Commands::Watch { group } => {
+        Commands::Watch { group , delay} => {
             let paths = db.get_repositories(group).unwrap();
-            let repos = paths
+            let repos: Vec<git2::Repository> = paths
                 .into_iter()
                 .map(git2::Repository::open)
-                .collect::<Result<_, git2::Error>>().unwrap();
+                .collect::<Result<_, git2::Error>>()
+                .unwrap();
 
             loop {
                 stdout().clear_screen().unwrap();
-                fun_name(&repos);
+                repos.iter().for_each(Summarize::summarize);
                 println!("last updated at: {}", Utc::now());
-                thread::sleep(Duration::from_secs(5));
-            }
-        }
-    }
-}
-
-fn fun_name(path_to_repo: &Vec<git2::Repository>) {
-    for repo in path_to_repo.iter() {
-        let mut status_opts = git2::StatusOptions::new();
-        status_opts
-            .include_untracked(true)
-            .show(git2::StatusShow::IndexAndWorkdir);
-
-        println!(
-            "{} {}",
-            repo.path().parent().unwrap().display(),
-            repo.head().unwrap().shorthand().unwrap()
-        );
-
-        let statuses = repo.statuses(Some(&mut status_opts)).unwrap();
-        for s in statuses.iter() {
-            if let Some(path) = s.path() {
-                println!(
-                    "\t{:#016b} {:#?} {:#?}",
-                    s.status().bits(),
-                    s.status(),
-                    path
-                );
+                thread::sleep(Duration::from_secs(delay));
             }
         }
     }

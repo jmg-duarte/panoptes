@@ -6,7 +6,6 @@ use std::{
 use rusqlite::{Connection, Row};
 
 pub struct Database {
-    path: PathBuf,
     conn: Connection,
 }
 
@@ -49,7 +48,6 @@ impl Database {
         .unwrap();
 
         Database {
-            path: path.as_ref().to_path_buf(),
             conn,
         }
     }
