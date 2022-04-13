@@ -47,6 +47,14 @@ enum Commands {
         #[clap(long, default_value_t = 5)]
         delay: u64
     },
+
+    /// Show the current status of the registered repositories.
+    Status {
+        /// The group to watch. If omitted,
+        /// all registered repositories will be used.
+        #[clap(short, long)]
+        group: Option<String>,
+    }
 }
 
 fn main() {
@@ -74,6 +82,16 @@ fn main() {
                 println!("last updated at: {}", Utc::now());
                 thread::sleep(Duration::from_secs(delay));
             }
+        }
+        Commands::Status {group} => {
+            let paths = db.get_repositories(group).unwrap();
+            let repos: Vec<git2::Repository> = paths
+                .into_iter()
+                .map(git2::Repository::open)
+                .collect::<Result<_, git2::Error>>()
+                .unwrap();
+
+            repos.iter().for_each(Summarize::summarize);
         }
     }
 }
