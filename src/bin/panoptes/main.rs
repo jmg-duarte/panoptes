@@ -3,7 +3,11 @@ use std::{env::current_dir, io::stdout, path::PathBuf, str::FromStr, thread, tim
 use chrono::prelude::*;
 use clap::{Parser, Subcommand};
 
-use panoptes::{db::Database, git::Summarize, stdout::StdoutExt};
+use panoptes::{
+    db::Database,
+    git::{CommitOptions, Summarize},
+    stdout::StdoutExt,
+};
 
 fn default_database_path() -> PathBuf {
     let mut default_database_path = PathBuf::from_str(&std::env::var("HOME").unwrap()).unwrap();
@@ -45,7 +49,11 @@ enum Commands {
 
         /// The refresh delay (in seconds).
         #[clap(long, default_value_t = 5)]
-        delay: u64
+        delay: u64,
+
+        /// Show the latest commit.
+        #[clap(long, default_value = "")]
+        show_commit_options: CommitOptions,
     },
 
     /// Show the current status of the registered repositories.
@@ -54,7 +62,11 @@ enum Commands {
         /// all registered repositories will be used.
         #[clap(short, long)]
         group: Option<String>,
-    }
+
+        /// Show the latest commit.
+        #[clap(long, default_value = "")]
+        show_commit_options: CommitOptions,
+    },
 }
 
 fn main() {
@@ -68,7 +80,8 @@ fn main() {
             let _ = git2::Repository::open(&directory).unwrap();
             db.add_repository(directory, group);
         }
-        Commands::Watch { group , delay} => {
+
+        Commands::Watch { group, delay, show_commit_options } => {
             let paths = db.get_repositories(group).unwrap();
             let repos: Vec<git2::Repository> = paths
                 .into_iter()
@@ -78,12 +91,18 @@ fn main() {
 
             loop {
                 stdout().clear_screen().unwrap();
-                repos.iter().for_each(Summarize::summarize);
+                repos
+                    .iter()
+                    .for_each(|repo| repo.summarize(&show_commit_options));
                 println!("last updated at: {}", Utc::now());
                 thread::sleep(Duration::from_secs(delay));
             }
         }
-        Commands::Status {group} => {
+
+        Commands::Status {
+            group,
+            show_commit_options: show_commit,
+        } => {
             let paths = db.get_repositories(group).unwrap();
             let repos: Vec<git2::Repository> = paths
                 .into_iter()
@@ -91,7 +110,9 @@ fn main() {
                 .collect::<Result<_, git2::Error>>()
                 .unwrap();
 
-            repos.iter().for_each(Summarize::summarize);
+            repos.iter().for_each(|repo| {
+                repo.summarize(&show_commit);
+            });
         }
     }
 }
