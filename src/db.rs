@@ -5,6 +5,32 @@ use std::{
 
 use rusqlite::{Connection, Row};
 
+pub struct Group {
+    id: String,
+    name: String,
+}
+
+impl Group {
+    const fn create_stmt() -> &'static str {
+        "CREATE TABLE IF NOT EXISTS groups (
+            id   INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT UNIQUE NOT NULL
+        );"
+    }
+
+    fn new(id: String, name: String) -> Self {
+        Self { id, name }
+    }
+}
+
+impl TryFrom<&rusqlite::Row<'static>> for Group {
+    type Error = rusqlite::Result<Self>;
+
+    fn try_from(row: &rusqlite::Row<'static>) -> Result<Self, Self::Error> {
+        Ok(Self::new(row.get(0)?, row.get(1)?))
+    }
+}
+
 pub struct Database {
     conn: Connection,
 }
@@ -27,14 +53,7 @@ impl Database {
         .unwrap();
 
         // Create the groups table.
-        conn.execute(
-            "CREATE TABLE IF NOT EXISTS groups (
-                id   INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT UNIQUE NOT NULL
-            );",
-            [],
-        )
-        .unwrap();
+        conn.execute(Group::create_stmt(), []).unwrap();
 
         // Create the repository-to-group N:M relationship table.
         conn.execute(
@@ -47,9 +66,7 @@ impl Database {
         )
         .unwrap();
 
-        Database {
-            conn,
-        }
+        Database { conn }
     }
 
     pub fn add_repository<P>(&self, path: P, group: Option<String>)
@@ -115,5 +132,10 @@ impl Database {
             rows.map(|res| res.map(|s: String| PathBuf::from_str(&s).unwrap()))
                 .collect()
         }
+    }
+
+    pub fn get_groups(&self) -> rusqlite::Result<Vec<String>> {
+        let statement = self.conn.prepare("SELECT * FROM groups;")?;
+        statement.query_map([], Group::from);
     }
 }
